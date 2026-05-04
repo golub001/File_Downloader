@@ -1,7 +1,10 @@
 package org.example;
 
+import java.io.File;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
@@ -19,8 +22,16 @@ public class FileDownloader implements AutoCloseable{
                 .executor(executor)
                 .build();
     }
-    public Path download(URI url, Path outputpath) {
-        return  null;
+    public Path download(URI url, Path outputpath) throws IOException, InterruptedException {
+        FileMetaData metadata= FileMetaData.fetch(client,url,config.requestTimeout());
+
+        if(metadata.acceptsRanges()){
+            //downloadInParallel
+        }
+        else{
+            //downloadAsStream
+        }
+        return null;
     }
 
     @Override
