@@ -1,9 +1,19 @@
 package org.example;
 
-//TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
+import java.net.URI;
+import java.nio.file.Path;
+
 public class Main {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        Config config=Config.builder().build();
+        try (FileDownloader downloader = new FileDownloader(config)) {
+            Path result = downloader.download(
+                    URI.create("http://localhost:8080/test.txt"),
+                    Path.of("downloads", "test.txt")
+            );
+            System.out.println("Done: " + result);
+        }
+
 
     }
 }
