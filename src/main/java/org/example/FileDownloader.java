@@ -21,9 +21,8 @@ public class FileDownloader implements AutoCloseable{
     public FileDownloader(Config config ) {
         this.config=config;
         this.executor = Executors.newFixedThreadPool(config.threadCount());
-        this.client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_2)
+        this.client = HttpClient.newBuilder()
                 .connectTimeout(config.connectTimeout())
-                .executor(executor)
                 .build();
     }
     public Path download(URI url, Path outputpath) throws IOException, InterruptedException {
