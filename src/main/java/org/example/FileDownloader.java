@@ -9,12 +9,10 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 
 public class FileDownloader implements AutoCloseable{
     private final HttpClient  client;
@@ -37,6 +35,8 @@ public class FileDownloader implements AutoCloseable{
 
         if (metadata.acceptsRanges() && metadata.contentLength() > 0) {
             downloadParallel(url, outputpath, metadata.contentLength());
+        }else{
+            downloadStream(url, outputpath);
         }
         return outputpath;
     }
@@ -72,6 +72,24 @@ public class FileDownloader implements AutoCloseable{
             }
         }
     }
+    private void downloadStream(URI url,Path outputpath) throws IOException, InterruptedException {
+        HttpRequest request=HttpRequest.newBuilder(url)
+                .GET()
+                .timeout(config.requestTimeout())
+                .build();
+        HttpResponse<InputStream> response=client.send(request,HttpResponse.BodyHandlers.ofInputStream());
+
+        if(response.statusCode()!=200){
+            throw new IOException("GET failed with status " + response.statusCode());
+        }
+
+        try(InputStream input=response.body()){
+            Files.copy(input,outputpath, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+        Files.deleteIfExists(outputpath);
+        throw e;
+    }
+    }
     private void downloadChunk(URI url,ChunkRange range,FileChannel channel) throws IOException, InterruptedException {
         HttpRequest request=HttpRequest.newBuilder(url)
                 .header("Range",range.toRangeHeader())
@@ -98,8 +116,15 @@ public class FileDownloader implements AutoCloseable{
             }
         }
     }
-    @Override
     public void close() {
         executor.shutdown();
+        try {
+            if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }
