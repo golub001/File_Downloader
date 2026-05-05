@@ -42,33 +42,44 @@ public class FileDownloader implements AutoCloseable{
     }
     private void downloadParallel(URI url,Path outputpath,long totalsize) throws IOException,InterruptedException {
         List<ChunkRange> chunkranges=ChunkRange.split(totalsize, this.config.chunkSize());
+        boolean success=false;
 
-        try(RandomAccessFile raf=new RandomAccessFile(outputpath.toFile(), "rw");
-            FileChannel channel=raf.getChannel()){
+        try{
+            try(RandomAccessFile raf=new RandomAccessFile(outputpath.toFile(), "rw");
+                FileChannel channel=raf.getChannel()){
 
-            raf.setLength(totalsize);
+                raf.setLength(totalsize);
 
-            List<Future<Void>> futures=new ArrayList<>();
-            for(ChunkRange range:chunkranges){
-                futures.add(executor.submit(()->{
-                    downloadChunk(url,range,channel);
-                    return null;
-                }));
-            }
-            try{
-                for(Future<Void> future:futures){
-                    future.get();
+                List<Future<Void>> futures=new ArrayList<>();
+                for(ChunkRange range:chunkranges){
+                    futures.add(executor.submit(()->{
+                        downloadChunk(url,range,channel);
+                        return null;
+                    }));
                 }
-            } catch (ExecutionException e) {
-                futures.forEach(f -> f.cancel(true));
-                Files.deleteIfExists(outputpath);
-                Throwable cause = e.getCause();
-                if (cause instanceof IOException io) throw io;
-                if (cause instanceof InterruptedException ie) {
+                try{
+                    for(Future<Void> future:futures){
+                        future.get();
+                    }
+                    success=true;
+                } catch (ExecutionException e) {
+                    futures.forEach(f -> f.cancel(true));
+                    Throwable cause = e.getCause();
+                    if (cause instanceof IOException io) throw io;
+                    if (cause instanceof InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw ie;
+                    }
+                    throw new IOException("Chunk download failed", cause);
+                } catch (InterruptedException e) {
+                    futures.forEach(f -> f.cancel(true));
                     Thread.currentThread().interrupt();
-                    throw ie;
+                    throw e;
                 }
-                throw new IOException("Chunk download failed", cause);
+            }
+        } finally {
+            if(!success){
+                Files.deleteIfExists(outputpath);
             }
         }
     }
@@ -83,12 +94,17 @@ public class FileDownloader implements AutoCloseable{
             throw new IOException("GET failed with status " + response.statusCode());
         }
 
-        try(InputStream input=response.body()){
-            Files.copy(input,outputpath, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-        Files.deleteIfExists(outputpath);
-        throw e;
-    }
+        boolean success=false;
+        try{
+            try(InputStream input=response.body()){
+                Files.copy(input,outputpath, StandardCopyOption.REPLACE_EXISTING);
+                success=true;
+            }
+        } finally {
+            if(!success){
+                Files.deleteIfExists(outputpath);
+            }
+        }
     }
     private void downloadChunk(URI url,ChunkRange range,FileChannel channel) throws IOException, InterruptedException {
         HttpRequest request=HttpRequest.newBuilder(url)
