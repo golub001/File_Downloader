@@ -106,6 +106,22 @@ public class FileDownloader implements AutoCloseable{
         }
     }
     private void downloadChunk(URI url,ChunkRange range,FileChannel channel) throws IOException, InterruptedException {
+        IOException lastError=null;
+        for(int attempt=0;attempt<=config.maxRetries();attempt++){
+            try{
+                doChunk(url,range,channel);
+                return;
+            } catch (IOException e) {
+                lastError=e;
+                if(attempt<config.maxRetries()){
+                    Thread.sleep(500L*(attempt+1));
+                }
+            }
+        }
+        throw lastError;
+    }
+
+    private void doChunk(URI url,ChunkRange range,FileChannel channel) throws IOException, InterruptedException {
         HttpRequest request=HttpRequest.newBuilder(url)
                 .header("Range",range.toRangeHeader())
                 .GET()
