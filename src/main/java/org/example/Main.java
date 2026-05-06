@@ -9,7 +9,7 @@ public class Main {
         try (FileDownloader downloader = new FileDownloader(config)) {
             Path result = downloader.download(
                     URI.create("http://localhost:8080/test.txt"),
-                    Path.of("downloads", "test.txt")
+                    Path.of("downloads", "test2.txt")
             );
             System.out.println("Done: " + result);
         }
